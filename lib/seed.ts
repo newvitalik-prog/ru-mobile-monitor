@@ -28,8 +28,8 @@ const OPERATORS = [
   // MVNO
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
-      // Yota — конструктор тарифов, нет фиксированных планов; AI-knowledge
-      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "ai-knowledge" },
+      // Yota — конструктор тарифов, нет фиксированных планов; renderer=constructor → специальная обработка
+      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "constructor" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",

@@ -74,9 +74,36 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
   let tariffsFound = 0;
   let promoFound = 0;
-  let method = "ai";
+  let method = "manual";
   let errorMsg: string | null = null;
   let itemStatus = "failed";
+
+  // Special case: constructor-model operators (e.g. Yota) — no fixed tariff plans
+  const isConstructor = operator.sources.some((s: SourceRow) => s.renderer === "constructor");
+  if (isConstructor) {
+    const website = (operator as { website?: string }).website ?? "";
+    await prisma.tariffSnapshot.create({
+      data: {
+        runId, operatorId,
+        tariffName: "Конструктор тарифа",
+        dataUnlimited: true,
+        voiceUnlimited: true,
+        sourceUrl: website,
+        parserConfidence: 1.0,
+        collectionMethod: "manual",
+        remarks: "Оператор использует конструктор тарифов — параметры выбираются пользователем индивидуально.",
+      },
+    });
+    await prisma.collectionRunItem.create({
+      data: { runId, operatorId, status: "success", method: "manual", tariffsFound: 1, promoFound: 0, durationMs: Date.now() - startTime },
+    });
+    for (const source of operator.sources) {
+      await prisma.source.update({ where: { id: source.id }, data: { lastVerifiedAt: new Date() } });
+    }
+    return NextResponse.json({ operatorId, status: "success", tariffsFound: 1, promoFound: 0, method: "manual" });
+  }
+
+  method = "ai";
 
   try {
     const tariffSources = operator.sources.filter(
