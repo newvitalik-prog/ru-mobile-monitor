@@ -48,44 +48,9 @@ const OPERATORS = [
       { sourceType: "b2c_tariffs", url: "https://www.sber.ru/mobile/tariffs", renderer: "ai" },
     ]
   },
-  { name: "МТТ Мобайл", slug: "mtt-mobile", category: "MVNO", website: "https://www.mtt.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.mtt.ru/personal/mobile/", renderer: "ai" },
-    ]
-  },
-  { name: "Дом.ru Мобайл", slug: "domru-mobile", category: "MVNO", website: "https://www.domru.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.domru.ru/mobile/tariff", renderer: "ai" },
-    ]
-  },
-  { name: "VK Mobile", slug: "vk-mobile", category: "MVNO", website: "https://vk.com/mobile",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://vk.com/mobile", renderer: "ai" },
-    ]
-  },
   { name: "МОТИВ", slug: "motiv", category: "MVNO", website: "https://motivtelecom.ru",
     sources: [
       { sourceType: "b2c_tariffs", url: "https://motivtelecom.ru/tariffs/", renderer: "ai" },
-    ]
-  },
-  { name: "Danycom", slug: "danycom", category: "MVNO", website: "https://danycom.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://danycom.ru/tariffs", renderer: "ai" },
-    ]
-  },
-  { name: "MCN Telecom", slug: "mcn-telecom", category: "MVNO", website: "https://mcntelecom.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://mcntelecom.ru/tariffs/", renderer: "ai" },
-    ]
-  },
-  { name: "Virgin Connect", slug: "virgin-connect", category: "MVNO", website: "https://virginconnect.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://virginconnect.ru/tariffs", renderer: "ai" },
-    ]
-  },
-  { name: "Мой оператор", slug: "moy-operator", category: "MVNO", website: "https://мойоператор.рф",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://xn--e1afmkfd.xn--p1ai/tariffs", renderer: "ai" },
     ]
   },
   { name: "Ультра-Мобайл", slug: "ultra-mobile", category: "MVNO", website: "https://ultra-mobile.ru",
