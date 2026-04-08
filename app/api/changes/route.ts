@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import type { TariffSnapshot } from "@prisma/client";
+
+type TariffRow = {
+  id: string; operatorId: string; tariffName: string;
+  monthlyFeeRub: number | null; dataGb: number | null;
+  voiceMinutes: number | null; smsCount: number | null;
+  operator: { name: string; category: string };
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -46,7 +52,7 @@ async function computeChanges(currentRunId: string, baselineRunId: string) {
   // Find new tariffs
   for (const current of currentTariffs) {
     const baseline = baselineTariffs.find(
-      (b: TariffSnapshot) =>
+      (b: TariffRow) =>
         b.operatorId === current.operatorId &&
         b.tariffName.toLowerCase() === current.tariffName.toLowerCase()
     );
@@ -73,7 +79,7 @@ async function computeChanges(currentRunId: string, baselineRunId: string) {
   // Find removed tariffs
   for (const baseline of baselineTariffs) {
     const current = currentTariffs.find(
-      (c: TariffSnapshot) =>
+      (c: TariffRow) =>
         c.operatorId === baseline.operatorId &&
         c.tariffName.toLowerCase() === baseline.tariffName.toLowerCase()
     );
