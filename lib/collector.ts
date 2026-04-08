@@ -34,7 +34,7 @@ async function fetchPage(url: string): Promise<string | null> {
 
 export async function runCollection(runId: string) {
   const settings = await prisma.appSettings.findFirst();
-  const model = settings?.openrouterModel ?? "google/gemini-2.0-flash-lite";
+  const model = settings?.openrouterModel ?? "google/gemini-2.0-flash-lite-001";
 
   const operators = await prisma.operator.findMany({
     where: { active: true },

@@ -12,7 +12,7 @@ interface Settings {
 }
 
 const MODELS = [
-  { value: "google/gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (быстрый, дешёвый)" },
+  { value: "google/gemini-2.0-flash-lite-001", label: "Gemini 2.0 Flash Lite (быстрый, дешёвый)" },
   { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash (рекомендуется)" },
   { value: "google/gemini-flash-1.5", label: "Gemini Flash 1.5" },
   { value: "anthropic/claude-3-haiku", label: "Claude 3 Haiku (быстрый)" },

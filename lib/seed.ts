@@ -140,7 +140,7 @@ export async function seedDatabase() {
         schedulePeriod: "weekly",
         scheduleDay: "monday",
         scheduleHour: 9,
-        openrouterModel: "google/gemini-2.0-flash-lite",
+        openrouterModel: "google/gemini-2.0-flash-lite-001",
       },
     });
   }

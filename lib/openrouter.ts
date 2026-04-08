@@ -171,7 +171,7 @@ ${cleanHtml}`;
 export async function getTariffsFromAIKnowledge(
   operatorName: string,
   operatorWebsite: string,
-  model: string = "google/gemini-2.0-flash-lite"
+  model: string = "google/gemini-2.0-flash-lite-001"
 ): Promise<{ tariffs: TariffData[]; confidence: number }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { tariffs: [], confidence: 0 };
