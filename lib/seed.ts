@@ -11,8 +11,7 @@ const OPERATORS = [
   },
   { name: "МегаФон", slug: "megafon", category: "MNO", website: "https://moscow.megafon.ru",
     sources: [
-      // SPA — Jina не получает данные; AI-knowledge
-      { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/tariffs/", renderer: "ai-knowledge" },
+      { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/marketplace/", renderer: "jina" },
     ]
   },
   { name: "Билайн", slug: "beeline", category: "MNO", website: "https://beeline.ru",
@@ -31,7 +30,7 @@ const OPERATORS = [
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
       // Конструктор тарифов — показываем типичные конфигурации через AI
-      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/voice/", renderer: "ai-knowledge" },
+      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "ai-knowledge" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",
@@ -101,6 +100,12 @@ export async function seedDatabase() {
       where: { slug: opData.slug },
       update: {},
       create: opData,
+    });
+
+    const expectedUrls = sources.map((s) => s.url);
+    // Delete orphaned sources (URLs no longer in the operator's source list)
+    await prisma.source.deleteMany({
+      where: { operatorId: operator.id, url: { notIn: expectedUrls } },
     });
 
     for (const src of sources) {
