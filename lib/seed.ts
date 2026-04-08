@@ -30,8 +30,8 @@ const OPERATORS = [
   // MVNO
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
-      // Конструктор тарифов — Jina получает данные, но цены индивидуальны
-      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/voice/", renderer: "constructor" },
+      // Конструктор тарифов — показываем типичные конфигурации через AI
+      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/voice/", renderer: "ai-knowledge" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",
