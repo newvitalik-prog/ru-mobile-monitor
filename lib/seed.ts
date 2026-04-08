@@ -30,8 +30,8 @@ const OPERATORS = [
   // MVNO
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
-      // Конструктор тарифов — специальная обработка без AI
-      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "constructor" },
+      // Конструктор тарифов — Jina получает данные, но цены индивидуальны
+      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/voice/", renderer: "constructor" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",
@@ -54,7 +54,7 @@ const OPERATORS = [
   },
   { name: "МОТИВ", slug: "motiv", category: "MVNO", website: "https://motivtelecom.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://motivtelecom.ru/tariffs/", renderer: "jina" },
+      { sourceType: "b2c_tariffs", url: "https://motivtelecom.ru/sverdlovsk_oblast/tariffs/vse", renderer: "jina" },
     ]
   },
 ];

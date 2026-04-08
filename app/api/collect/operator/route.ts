@@ -94,17 +94,18 @@ export async function POST(req: NextRequest) {
   // Special case: constructor-model operators (e.g. Yota) — no fixed tariff plans
   const isConstructor = operator.sources.some((s: SourceRow) => s.renderer === "constructor");
   if (isConstructor) {
-    const website = (operator as { website?: string }).website ?? "";
+    const constructorSource = operator.sources.find((s: SourceRow) => s.renderer === "constructor");
+    const website = constructorSource?.url ?? (operator as { website?: string }).website ?? "";
     await prisma.tariffSnapshot.create({
       data: {
         runId, operatorId,
         tariffName: "Конструктор тарифа",
-        dataUnlimited: true,
-        voiceUnlimited: true,
+        dataUnlimited: false,
+        voiceUnlimited: false,
         sourceUrl: website,
         parserConfidence: 1.0,
         collectionMethod: "manual",
-        remarks: "Оператор использует конструктор тарифов — параметры выбираются пользователем индивидуально.",
+        remarks: "Оператор использует конструктор тарифов — ГБ, минуты и SMS выбираются индивидуально. Пример: 100 мин + 50 ГБ ≈ 637 ₽/мес. Цена зависит от выбранных параметров.",
       },
     });
     await prisma.collectionRunItem.create({
