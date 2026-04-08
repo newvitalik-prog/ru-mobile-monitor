@@ -46,10 +46,9 @@ const OPERATORS = [
       { sourceType: "promotions", url: "https://www.tinkoff.ru/mobile-operator/", renderer: "jina" },
     ]
   },
-  { name: "СберМобайл", slug: "sbermobile", category: "MVNO", website: "https://www.sber.ru",
+  { name: "СберМобайл", slug: "sbermobile", category: "MVNO", website: "https://sbermobile.ru",
     sources: [
-      // Сайт вернул 404 через Jina — AI-knowledge
-      { sourceType: "b2c_tariffs", url: "https://www.sber.ru/sberbank/mobile/", renderer: "ai-knowledge" },
+      { sourceType: "b2c_tariffs", url: "https://sbermobile.ru/tariffs", renderer: "jina" },
     ]
   },
   { name: "МОТИВ", slug: "motiv", category: "MVNO", website: "https://motivtelecom.ru",
