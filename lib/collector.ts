@@ -1,6 +1,8 @@
 import { prisma } from "./db";
 import { extractTariffsWithAI, extractPromotionsWithAI } from "./openrouter";
 
+type SourceRow = { id: string; sourceType: string; url: string };
+
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -51,10 +53,10 @@ export async function runCollection(runId: string) {
 
     try {
       const tariffSources = operator.sources.filter(
-        (s) => s.sourceType === "b2c_tariffs" || s.sourceType === "landing"
+        (s: SourceRow) => s.sourceType === "b2c_tariffs" || s.sourceType === "landing"
       );
       const promoSources = operator.sources.filter(
-        (s) => s.sourceType === "promotions"
+        (s: SourceRow) => s.sourceType === "promotions"
       );
 
       // Collect tariffs
