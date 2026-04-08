@@ -5,7 +5,7 @@ const OPERATORS = [
   // MNO
   { name: "МТС", slug: "mts", category: "MNO", website: "https://moskva.mts.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://moskva.mts.ru/personal/mobilnaya-svyaz/tarifi/vse-tarifi/all", renderer: "jina" },
+      { sourceType: "b2c_tariffs", url: "https://moskva.mts.ru/personal/mobilnaya-svyaz/tarifi/vse-tarifi/mobile", renderer: "jina" },
       { sourceType: "promotions", url: "https://moskva.mts.ru/personal/vse-akcii", renderer: "jina" },
     ]
   },
@@ -96,7 +96,7 @@ export async function seedDatabase() {
     }
   }
 
-  // Create default settings
+  // Create or update default settings
   const settingsExist = await prisma.appSettings.findFirst();
   if (!settingsExist) {
     await prisma.appSettings.create({
@@ -105,9 +105,17 @@ export async function seedDatabase() {
         schedulePeriod: "weekly",
         scheduleDay: "monday",
         scheduleHour: 9,
-        openrouterModel: "google/gemini-2.0-flash-lite-001",
+        openrouterModel: "google/gemini-2.5-flash-preview-05-20",
       },
     });
+  } else {
+    // Update model if it's the old default
+    if (settingsExist.openrouterModel === "google/gemini-2.0-flash-lite-001") {
+      await prisma.appSettings.update({
+        where: { id: settingsExist.id },
+        data: { openrouterModel: "google/gemini-2.5-flash-preview-05-20" },
+      });
+    }
   }
 
   return { ok: true };

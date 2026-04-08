@@ -23,55 +23,11 @@ export interface PromotionData {
   restrictions?: string;
 }
 
-export async function extractTariffsWithAI(
-  html: string,
-  operatorName: string,
-  sourceUrl: string,
-  model: string = "google/gemini-flash-1.5-8b"
-): Promise<TariffData[]> {
+const DEFAULT_MODEL = "google/gemini-2.5-flash-preview-05-20";
+
+async function callOpenRouter(model: string, prompt: string, maxTokens: number): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY не задан");
-
-  // Clean HTML: remove scripts, styles, keep text
-  const cleanHtml = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .substring(0, 60000);
-
-  const prompt = `Ты — точный парсер тарифов. Оператор: "${operatorName}". Источник: ${sourceUrl}
-
-ЗАДАЧА: извлечь тарифные планы для физических лиц из текста ниже.
-
-СТРОГИЕ ПРАВИЛА:
-1. Используй ТОЛЬКО названия тарифов, которые явно написаны в тексте. Не придумывай названия.
-2. Указывай цену ТОЛЬКО если она явно написана рядом с тарифом (число + ₽ или руб). Не угадывай цены.
-3. Каждый тариф включай ОДИН РАЗ — без дублей.
-4. Не включай: тарифы для бизнеса (B2B), архивные тарифы, тарифы для роуминга, планшетов или устройств.
-5. Если цена не найдена в тексте — оставь monthlyFeeRub как null (не ставь 0).
-6. dataGb = null если безлимит (dataUnlimited = true). Не ставь огромные числа вместо безлимита.
-
-Поля JSON:
-- tariffName: точное название тарифа из текста (строка)
-- monthlyFeeRub: абонплата в руб/мес (число или null — только если явно указана в тексте)
-- activationFeeRub: стоимость подключения (число или null)
-- dataGb: интернет ГБ (число или null)
-- dataUnlimited: безлимитный интернет (true/false)
-- voiceMinutes: минуты (число или null)
-- voiceUnlimited: безлимитные звонки (true/false)
-- smsCount: SMS (число или null)
-- includedServices: бонусные сервисы через запятую (строка или null)
-- esimAvailable: поддержка eSIM (true/false/null)
-- segment: "prepaid" или "postpaid" (строка или null)
-- remarks: важные условия и примечания (строка или null)
-
-Верни ТОЛЬКО JSON массив. Никаких пояснений. Если тарифов нет — [].
-
-Текст страницы:
-${cleanHtml}`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -85,7 +41,7 @@ ${cleanHtml}`;
       model,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
-      max_tokens: 4000,
+      max_tokens: maxTokens,
     }),
     signal: AbortSignal.timeout(60000),
   });
@@ -96,29 +52,17 @@ ${cleanHtml}`;
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content ?? "[]";
-
-  // Extract JSON from response
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
-
-  try {
-    return JSON.parse(jsonMatch[0]) as TariffData[];
-  } catch {
-    return [];
-  }
+  return data.choices?.[0]?.message?.content ?? "[]";
 }
 
-export async function extractPromotionsWithAI(
-  html: string,
-  operatorName: string,
-  sourceUrl: string,
-  model: string = "google/gemini-flash-1.5-8b"
-): Promise<PromotionData[]> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY не задан");
+function parseJsonArray(content: string): unknown[] {
+  const match = content.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try { return JSON.parse(match[0]); } catch { return []; }
+}
 
-  const cleanHtml = html
+function cleanPageText(html: string): string {
+  return html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
@@ -126,82 +70,121 @@ export async function extractPromotionsWithAI(
     .replace(/\s+/g, " ")
     .trim()
     .substring(0, 60000);
+}
 
-  const prompt = `Ты — парсер акций и специальных предложений российского мобильного оператора "${operatorName}".
-Из текста ниже (это очищенный HTML страницы с сайта ${sourceUrl}) извлеки все активные акции, специальные предложения и промо.
+export async function extractTariffsWithAI(
+  html: string,
+  operatorName: string,
+  sourceUrl: string,
+  model: string = DEFAULT_MODEL
+): Promise<TariffData[]> {
+  const text = cleanPageText(html);
 
-Для каждой акции верни JSON объект с полями:
-- promotionName: название акции (строка)
-- promotionType: тип — "скидка", "бонус", "подарок", "кэшбэк", "рассрочка", "другое"
-- mechanismSummary: краткое описание механики (строка или null)
-- benefitValue: ценность предложения — например "50% скидка", "+10 ГБ", "500 руб" (строка или null)
-- startDate: дата начала в формате YYYY-MM-DD (строка или null)
-- endDate: дата окончания в формате YYYY-MM-DD (строка или null)
-- restrictions: ограничения и условия (строка или null)
+  const prompt = `Ты — точный парсер тарифов мобильной связи. Оператор: "${operatorName}". Источник: ${sourceUrl}
 
-Верни ТОЛЬКО JSON массив. Никаких пояснений. Если акций нет — верни [].
+ЗАДАЧА: извлечь только тарифы мобильной связи для физических лиц.
+
+СТРОГИЕ ПРАВИЛА — нарушение любого правила делает данные бесполезными:
+1. Используй ТОЛЬКО названия тарифов, которые ДОСЛОВНО написаны в тексте ниже. ЗАПРЕЩЕНО придумывать или изменять названия.
+2. ИСКЛЮЧИ: тарифы для бизнеса (B2B), домашний интернет (содержат слова "Дома", "Домашний", "Дом", "Home"), роуминг, планшеты, модемы, устройства, архивные тарифы.
+3. monthlyFeeRub — ТОЛЬКО если цена явно написана в тексте рядом с тарифом (число + ₽ или руб). Иначе null. НИКОГДА не угадывай цену.
+4. Каждый тариф — ровно ОДИН РАЗ. Дубли запрещены.
+5. dataUnlimited: true → dataGb: null. НИКОГДА не пиши 1024 или другое большое число вместо безлимита.
+6. Нулевые значения (0 ₽, 0 мин) — записывай как null, а не 0.
+7. Не включай тарифы, у которых нет ни названия, ни цены.
+
+Поля JSON объекта:
+- tariffName: дословное название из текста
+- monthlyFeeRub: число или null
+- activationFeeRub: число или null
+- dataGb: число или null
+- dataUnlimited: true/false
+- voiceMinutes: число или null
+- voiceUnlimited: true/false
+- smsCount: число или null
+- includedServices: строка или null
+- esimAvailable: true/false/null
+- segment: "prepaid"/"postpaid"/null
+- remarks: строка или null
+
+Верни ТОЛЬКО JSON массив []. Никакого текста вокруг.
 
 Текст страницы:
-${cleanHtml}`;
+${text}`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://ru-mobile-monitor.vercel.app",
-      "X-Title": "RU Mobile Tariffs Monitor",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      max_tokens: 3000,
-    }),
-    signal: AbortSignal.timeout(60000),
-  });
+  const content = await callOpenRouter(model, prompt, 4000);
+  return parseJsonArray(content) as TariffData[];
+}
 
-  if (!response.ok) return [];
+export async function extractPromotionsWithAI(
+  html: string,
+  operatorName: string,
+  sourceUrl: string,
+  model: string = DEFAULT_MODEL
+): Promise<PromotionData[]> {
+  const text = cleanPageText(html);
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content ?? "[]";
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
+  const prompt = `Ты — парсер акций российского мобильного оператора "${operatorName}". Источник: ${sourceUrl}
+
+Извлеки только активные акции и спецпредложения для физлиц. Используй ТОЛЬКО то, что написано в тексте.
+
+Поля JSON:
+- promotionName: название акции из текста
+- promotionType: "скидка"/"бонус"/"подарок"/"кэшбэк"/"рассрочка"/"другое"
+- mechanismSummary: краткое описание механики (строка или null)
+- benefitValue: ценность — "50% скидка", "+10 ГБ", "500 руб" (строка или null)
+- startDate: YYYY-MM-DD или null
+- endDate: YYYY-MM-DD или null
+- restrictions: ограничения (строка или null)
+
+Верни ТОЛЬКО JSON массив []. Если акций нет — [].
+
+Текст страницы:
+${text}`;
 
   try {
-    return JSON.parse(jsonMatch[0]) as PromotionData[];
+    const content = await callOpenRouter(model, prompt, 3000);
+    return parseJsonArray(content) as PromotionData[];
   } catch {
     return [];
   }
 }
 
-// AI fallback: ask AI to generate tariff data from its own knowledge
-// Used when operator website is blocked/unavailable
+// AI fallback when operator site is blocked/unavailable
 export async function getTariffsFromAIKnowledge(
   operatorName: string,
   operatorWebsite: string,
-  model: string = "google/gemini-2.0-flash-lite-001"
+  model: string = DEFAULT_MODEL
 ): Promise<{ tariffs: TariffData[]; confidence: number }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { tariffs: [], confidence: 0 };
 
   const prompt = `Ты — эксперт по тарифам российских мобильных операторов.
 
-Предоставь актуальные тарифы оператора "${operatorName}" (сайт: ${operatorWebsite}) для физических лиц.
+Перечисли ТОЛЬКО реально существующие тарифы оператора "${operatorName}" (сайт: ${operatorWebsite}) для физических лиц.
 
-Верни JSON массив с тарифами. Для каждого тарифа:
-- tariffName: название тарифа
-- monthlyFeeRub: абонентская плата в рублях/месяц (число)
-- dataGb: интернет в ГБ (число, null если безлимит)
-- dataUnlimited: безлимитный интернет (true/false)
-- voiceMinutes: минуты (число, null если безлимит)
-- voiceUnlimited: безлимитные звонки (true/false)
-- smsCount: SMS (число или null)
-- includedServices: дополнительные сервисы (строка или null)
-- segment: "prepaid" или "postpaid"
-- remarks: важные примечания
+КРИТИЧЕСКИ ВАЖНО:
+- Включай тариф ТОЛЬКО если ты уверен в его существовании и точном названии.
+- НЕ ВЫДУМЫВАЙ тарифы, названия, цены. Лучше включить меньше, но точно.
+- Не включай тарифы с датами в названии (например "Тариф_04_2024").
+- Не включай общие описания ("Безлимитный интернет") — только реальные брендированные названия.
+- Если оператор использует конструктор тарифов (Yota, Ростелеком) — верни 1 запись с описанием конструктора.
+- Цены указывай только если уверен. Неизвестную цену — null.
+- Не указывай диапазоны цен (например "250-350") — только конкретное число или null.
 
-Верни ТОЛЬКО JSON массив. Если не знаешь точных данных — укажи приблизительные значения с пометкой в remarks "данные из обучающей выборки AI".`;
+Поля JSON:
+- tariffName: точное брендированное название тарифа
+- monthlyFeeRub: число или null
+- dataGb: число или null
+- dataUnlimited: true/false
+- voiceMinutes: число или null
+- voiceUnlimited: true/false
+- smsCount: число или null
+- includedServices: строка или null
+- segment: "prepaid"/"postpaid"/null
+- remarks: важные условия; добавь "⚠ данные из базы знаний AI, требуют проверки"
+
+Верни ТОЛЬКО JSON массив [].`;
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -215,7 +198,7 @@ export async function getTariffsFromAIKnowledge(
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
+        temperature: 0.1,
         max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(60000),
@@ -225,11 +208,8 @@ export async function getTariffsFromAIKnowledge(
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "[]";
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return { tariffs: [], confidence: 0 };
-
-    const tariffs = JSON.parse(jsonMatch[0]) as TariffData[];
-    return { tariffs, confidence: 0.4 }; // Lower confidence for AI-generated data
+    const tariffs = parseJsonArray(content) as TariffData[];
+    return { tariffs, confidence: 0.4 };
   } catch {
     return { tariffs: [], confidence: 0 };
   }
