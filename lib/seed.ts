@@ -55,21 +55,25 @@ const OPERATORS = [
 ];
 
 export async function seedDatabase() {
-  // Purge old run data — keep only the latest completed/partial run to eliminate duplicates
-  const latestRun = await prisma.collectionRun.findFirst({
-    where: { status: { in: ["completed", "partial"] } },
-    orderBy: { finishedAt: "desc" },
-  });
-  const runsToDelete = await prisma.collectionRun.findMany({
-    where: latestRun ? { id: { not: latestRun.id } } : {},
+  // Keep only the last 10 runs, purge older ones
+  const recentRuns = await prisma.collectionRun.findMany({
+    orderBy: { startedAt: "desc" },
     select: { id: true },
+    take: 10,
   });
-  if (runsToDelete.length > 0) {
-    const ids = runsToDelete.map((r) => r.id);
-    await prisma.tariffSnapshot.deleteMany({ where: { runId: { in: ids } } });
-    await prisma.promotionSnapshot.deleteMany({ where: { runId: { in: ids } } });
-    await prisma.collectionRunItem.deleteMany({ where: { runId: { in: ids } } });
-    await prisma.collectionRun.deleteMany({ where: { id: { in: ids } } });
+  if (recentRuns.length === 10) {
+    const keepIds = recentRuns.map((r) => r.id);
+    const oldRuns = await prisma.collectionRun.findMany({
+      where: { id: { notIn: keepIds } },
+      select: { id: true },
+    });
+    if (oldRuns.length > 0) {
+      const ids = oldRuns.map((r) => r.id);
+      await prisma.tariffSnapshot.deleteMany({ where: { runId: { in: ids } } });
+      await prisma.promotionSnapshot.deleteMany({ where: { runId: { in: ids } } });
+      await prisma.collectionRunItem.deleteMany({ where: { runId: { in: ids } } });
+      await prisma.collectionRun.deleteMany({ where: { id: { in: ids } } });
+    }
   }
 
   // Create default admin user
@@ -122,15 +126,15 @@ export async function seedDatabase() {
         schedulePeriod: "weekly",
         scheduleDay: "monday",
         scheduleHour: 9,
-        openrouterModel: "google/gemini-2.5-flash-preview-05-20",
+        openrouterModel: "google/gemini-2.5-flash",
       },
     });
   } else {
     // Update model if it's the old default
-    if (settingsExist.openrouterModel === "google/gemini-2.0-flash-lite-001") {
+    if (settingsExist.openrouterModel !== "google/gemini-2.5-flash") {
       await prisma.appSettings.update({
         where: { id: settingsExist.id },
-        data: { openrouterModel: "google/gemini-2.5-flash-preview-05-20" },
+        data: { openrouterModel: "google/gemini-2.5-flash" },
       });
     }
   }
