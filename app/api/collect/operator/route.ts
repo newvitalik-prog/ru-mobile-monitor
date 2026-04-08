@@ -91,32 +91,6 @@ export async function POST(req: NextRequest) {
   let errorMsg: string | null = null;
   let itemStatus = "failed";
 
-  // Special case: constructor-model operators (e.g. Yota) — no fixed tariff plans
-  const isConstructor = operator.sources.some((s: SourceRow) => s.renderer === "constructor");
-  if (isConstructor) {
-    const constructorSource = operator.sources.find((s: SourceRow) => s.renderer === "constructor");
-    const website = constructorSource?.url ?? (operator as { website?: string }).website ?? "";
-    await prisma.tariffSnapshot.create({
-      data: {
-        runId, operatorId,
-        tariffName: "Конструктор тарифа",
-        dataUnlimited: false,
-        voiceUnlimited: false,
-        sourceUrl: website,
-        parserConfidence: 1.0,
-        collectionMethod: "manual",
-        remarks: "Оператор использует конструктор тарифов — ГБ, минуты и SMS выбираются индивидуально. Пример: 100 мин + 50 ГБ ≈ 637 ₽/мес. Цена зависит от выбранных параметров.",
-      },
-    });
-    await prisma.collectionRunItem.create({
-      data: { runId, operatorId, status: "success", method: "manual", tariffsFound: 1, promoFound: 0, durationMs: Date.now() - startTime },
-    });
-    for (const source of operator.sources) {
-      await prisma.source.update({ where: { id: source.id }, data: { lastVerifiedAt: new Date() } });
-    }
-    return NextResponse.json({ operatorId, status: "success", tariffsFound: 1, promoFound: 0, method: "manual" });
-  }
-
   method = "ai";
 
   try {
