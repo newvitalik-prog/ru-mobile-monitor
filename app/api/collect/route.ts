@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { runCollection } from "@/lib/collector";
 
 export async function POST() {
-  // Check if already running
   const running = await prisma.collectionRun.findFirst({
     where: { status: "running" },
   });
@@ -14,19 +12,22 @@ export async function POST() {
     );
   }
 
-  // Create run record
+  const operators = await prisma.operator.findMany({
+    where: { active: true },
+    select: { id: true, name: true },
+  });
+
   const run = await prisma.collectionRun.create({
-    data: { status: "pending", triggerType: "manual" },
+    data: {
+      status: "running",
+      triggerType: "manual",
+      totalOperators: operators.length,
+    },
   });
 
-  // Start async (don't await — return immediately)
-  runCollection(run.id).catch((e) => {
-    console.error("Collection error:", e);
-    prisma.collectionRun.update({
-      where: { id: run.id },
-      data: { status: "failed", finishedAt: new Date() },
-    });
+  return NextResponse.json({
+    runId: run.id,
+    status: "started",
+    operators: operators.map((o) => o.id),
   });
-
-  return NextResponse.json({ runId: run.id, status: "started" });
 }
