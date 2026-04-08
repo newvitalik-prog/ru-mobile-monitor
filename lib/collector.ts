@@ -1,10 +1,14 @@
 import { prisma } from "./db";
-import { extractTariffsWithAI, extractPromotionsWithAI } from "./openrouter";
+import {
+  extractTariffsWithAI,
+  extractPromotionsWithAI,
+  getTariffsFromAIKnowledge,
+} from "./openrouter";
 
 type SourceRow = { id: string; sourceType: string; url: string };
 
 const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 async function fetchPage(url: string): Promise<string | null> {
   try {
@@ -12,14 +16,17 @@ async function fetchPage(url: string): Promise<string | null> {
       headers: {
         "User-Agent": USER_AGENT,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        Connection: "keep-alive",
+        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
       },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(25000),
     });
     if (!response.ok) return null;
-    return await response.text();
+    const text = await response.text();
+    // Return null if page seems to be a bot-check or empty
+    if (text.length < 500) return null;
+    return text;
   } catch {
     return null;
   }
@@ -27,7 +34,7 @@ async function fetchPage(url: string): Promise<string | null> {
 
 export async function runCollection(runId: string) {
   const settings = await prisma.appSettings.findFirst();
-  const model = settings?.openrouterModel ?? "google/gemini-flash-1.5-8b";
+  const model = settings?.openrouterModel ?? "google/gemini-2.0-flash-lite";
 
   const operators = await prisma.operator.findMany({
     where: { active: true },
@@ -59,22 +66,57 @@ export async function runCollection(runId: string) {
         (s: SourceRow) => s.sourceType === "promotions"
       );
 
-      // Collect tariffs
+      const website = (operator as { website?: string }).website ?? tariffSources[0]?.url ?? "";
+
+      // Try to collect tariffs from website first, fallback to AI knowledge
+      let fetchedFromSite = false;
       for (const source of tariffSources) {
         try {
           const html = await fetchPage(source.url);
-          if (!html) {
-            errorMsg = `Не удалось загрузить ${source.url}`;
-            continue;
-          }
+          if (!html) continue;
 
-          const tariffs = await extractTariffsWithAI(
-            html,
+          const tariffs = await extractTariffsWithAI(html, operator.name, source.url, model);
+          if (tariffs.length > 0) {
+            fetchedFromSite = true;
+            for (const t of tariffs) {
+              await prisma.tariffSnapshot.create({
+                data: {
+                  runId,
+                  operatorId: operator.id,
+                  tariffName: t.tariffName,
+                  monthlyFeeRub: t.monthlyFeeRub ?? null,
+                  activationFeeRub: t.activationFeeRub ?? null,
+                  dataGb: t.dataGb ?? null,
+                  dataUnlimited: t.dataUnlimited ?? false,
+                  voiceMinutes: t.voiceMinutes ?? null,
+                  voiceUnlimited: t.voiceUnlimited ?? false,
+                  smsCount: t.smsCount ?? null,
+                  includedServices: t.includedServices ?? null,
+                  esimAvailable: t.esimAvailable ?? null,
+                  segment: t.segment ?? null,
+                  remarks: t.remarks ?? null,
+                  sourceUrl: source.url,
+                  parserConfidence: 0.85,
+                  collectionMethod: "html+ai",
+                },
+              });
+              tariffsFound++;
+            }
+          }
+        } catch (e) {
+          errorMsg = String(e);
+        }
+      }
+
+      // AI knowledge fallback if site was not accessible
+      if (!fetchedFromSite && tariffSources.length > 0) {
+        method = "ai-knowledge";
+        try {
+          const { tariffs, confidence } = await getTariffsFromAIKnowledge(
             operator.name,
-            source.url,
+            website,
             model
           );
-
           for (const t of tariffs) {
             await prisma.tariffSnapshot.create({
               data: {
@@ -91,32 +133,26 @@ export async function runCollection(runId: string) {
                 includedServices: t.includedServices ?? null,
                 esimAvailable: t.esimAvailable ?? null,
                 segment: t.segment ?? null,
-                remarks: t.remarks ?? null,
-                sourceUrl: source.url,
-                parserConfidence: 0.8,
-                collectionMethod: "ai",
+                remarks: (t.remarks ? t.remarks + " | " : "") + "⚠ Данные из базы знаний AI (сайт недоступен с сервера)",
+                sourceUrl: website,
+                parserConfidence: confidence,
+                collectionMethod: "ai-knowledge",
               },
             });
             tariffsFound++;
           }
+          if (tariffs.length > 0) errorMsg = null;
         } catch (e) {
-          errorMsg = String(e);
+          errorMsg = errorMsg ?? String(e);
         }
       }
 
-      // Collect promotions
+      // Collect promotions (try site, no AI-knowledge fallback for promos)
       for (const source of promoSources) {
         try {
           const html = await fetchPage(source.url);
           if (!html) continue;
-
-          const promos = await extractPromotionsWithAI(
-            html,
-            operator.name,
-            source.url,
-            model
-          );
-
+          const promos = await extractPromotionsWithAI(html, operator.name, source.url, model);
           for (const p of promos) {
             await prisma.promotionSnapshot.create({
               data: {
@@ -131,7 +167,7 @@ export async function runCollection(runId: string) {
                 restrictions: p.restrictions ?? null,
                 sourceUrl: source.url,
                 parserConfidence: 0.75,
-                collectionMethod: "ai",
+                collectionMethod: "html+ai",
               },
             });
             promoFound++;
@@ -142,8 +178,12 @@ export async function runCollection(runId: string) {
       }
 
       if (tariffsFound > 0) {
-        itemStatus = "success";
-        successCount++;
+        itemStatus = method === "ai-knowledge" ? "partial" : "success";
+        if (method === "ai-knowledge") {
+          partialCount++;
+        } else {
+          successCount++;
+        }
       } else if (errorMsg) {
         itemStatus = "failed";
         failedCount++;
@@ -172,7 +212,6 @@ export async function runCollection(runId: string) {
       },
     });
 
-    // Update source lastVerifiedAt
     for (const source of operator.sources) {
       await prisma.source.update({
         where: { id: source.id },
@@ -184,7 +223,12 @@ export async function runCollection(runId: string) {
   await prisma.collectionRun.update({
     where: { id: runId },
     data: {
-      status: failedCount === operators.length ? "failed" : partialCount > 0 ? "partial" : "completed",
+      status:
+        successCount + partialCount === 0
+          ? "failed"
+          : partialCount > 0
+          ? "partial"
+          : "completed",
       finishedAt: new Date(),
       successCount,
       partialCount,

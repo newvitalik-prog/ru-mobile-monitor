@@ -165,3 +165,63 @@ ${cleanHtml}`;
     return [];
   }
 }
+
+// AI fallback: ask AI to generate tariff data from its own knowledge
+// Used when operator website is blocked/unavailable
+export async function getTariffsFromAIKnowledge(
+  operatorName: string,
+  operatorWebsite: string,
+  model: string = "google/gemini-2.0-flash-lite"
+): Promise<{ tariffs: TariffData[]; confidence: number }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { tariffs: [], confidence: 0 };
+
+  const prompt = `Ты — эксперт по тарифам российских мобильных операторов.
+
+Предоставь актуальные тарифы оператора "${operatorName}" (сайт: ${operatorWebsite}) для физических лиц.
+
+Верни JSON массив с тарифами. Для каждого тарифа:
+- tariffName: название тарифа
+- monthlyFeeRub: абонентская плата в рублях/месяц (число)
+- dataGb: интернет в ГБ (число, null если безлимит)
+- dataUnlimited: безлимитный интернет (true/false)
+- voiceMinutes: минуты (число, null если безлимит)
+- voiceUnlimited: безлимитные звонки (true/false)
+- smsCount: SMS (число или null)
+- includedServices: дополнительные сервисы (строка или null)
+- segment: "prepaid" или "postpaid"
+- remarks: важные примечания
+
+Верни ТОЛЬКО JSON массив. Если не знаешь точных данных — укажи приблизительные значения с пометкой в remarks "данные из обучающей выборки AI".`;
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://ru-mobile-monitor.vercel.app",
+        "X-Title": "RU Mobile Tariffs Monitor",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 4000,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!response.ok) return { tariffs: [], confidence: 0 };
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content ?? "[]";
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return { tariffs: [], confidence: 0 };
+
+    const tariffs = JSON.parse(jsonMatch[0]) as TariffData[];
+    return { tariffs, confidence: 0.4 }; // Lower confidence for AI-generated data
+  } catch {
+    return { tariffs: [], confidence: 0 };
+  }
+}

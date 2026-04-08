@@ -12,9 +12,9 @@ interface Settings {
 }
 
 const MODELS = [
-  { value: "google/gemini-flash-1.5-8b", label: "Gemini Flash 1.5 8B (быстрый, дешёвый)" },
-  { value: "google/gemini-flash-1.5", label: "Gemini Flash 1.5 (рекомендуется)" },
-  { value: "google/gemini-pro-1.5", label: "Gemini Pro 1.5 (точнее, дороже)" },
+  { value: "google/gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (быстрый, дешёвый)" },
+  { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash (рекомендуется)" },
+  { value: "google/gemini-flash-1.5", label: "Gemini Flash 1.5" },
   { value: "anthropic/claude-3-haiku", label: "Claude 3 Haiku (быстрый)" },
   { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (точный)" },
   { value: "openai/gpt-4o-mini", label: "GPT-4o Mini (дешёвый)" },
