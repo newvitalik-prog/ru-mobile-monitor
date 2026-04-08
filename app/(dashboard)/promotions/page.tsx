@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -18,24 +18,42 @@ interface Promo {
   ambiguityFlag: boolean;
 }
 
+interface Run { id: string; status: string; startedAt: string; successCount: number; totalOperators: number }
 interface Operator { id: string; name: string }
 
 export default function PromotionsPage() {
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [promos, setPromos] = useState<Promo[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterOp, setFilterOp] = useState("");
 
   useEffect(() => {
-    fetch("/api/operators").then((r) => r.json()).then(setOperators);
+    Promise.all([
+      fetch("/api/promotions").then((r) => r.json()),
+      fetch("/api/operators").then((r) => r.json()),
+    ]).then(([data, ops]) => {
+      const runList: Run[] = data.runs ?? [];
+      setRuns(runList);
+      setOperators(ops);
+      if (runList.length > 0) setSelectedRunId(runList[0].id);
+      else setLoading(false);
+    });
   }, []);
 
-  useEffect(() => {
+  const loadPromos = useCallback(() => {
+    if (!selectedRunId) return;
     setLoading(true);
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ runId: selectedRunId });
     if (filterOp) params.set("operatorId", filterOp);
-    fetch(`/api/promotions?${params}`).then((r) => r.json()).then(setPromos).finally(() => setLoading(false));
-  }, [filterOp]);
+    fetch(`/api/promotions?${params}`)
+      .then((r) => r.json())
+      .then((data) => setPromos(data.promotions ?? []))
+      .finally(() => setLoading(false));
+  }, [selectedRunId, filterOp]);
+
+  useEffect(() => { loadPromos(); }, [loadPromos]);
 
   return (
     <div className="p-6 space-y-4">
@@ -44,11 +62,22 @@ export default function PromotionsPage() {
           <h1 className="text-xl font-semibold text-gray-900">Акции и спецпредложения</h1>
           <p className="text-sm text-gray-500">{promos.length} акций</p>
         </div>
-        <select value={filterOp} onChange={(e) => setFilterOp(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1.5 text-sm">
-          <option value="">Все операторы</option>
-          {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
+        <div className="flex gap-2">
+          <select value={filterOp} onChange={(e) => setFilterOp(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1.5 text-sm">
+            <option value="">Все операторы</option>
+            {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <select value={selectedRunId} onChange={(e) => setSelectedRunId(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
+            {runs.length === 0 && <option value="">Нет данных</option>}
+            {runs.map((r, i) => (
+              <option key={r.id} value={r.id}>
+                {i === 0 ? "▶ " : ""}{format(new Date(r.startedAt), "d MMM, HH:mm", { locale: ru })} — {r.successCount}/{r.totalOperators} оп.
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (

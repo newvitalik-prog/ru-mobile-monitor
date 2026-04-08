@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 
 interface Tariff {
   id: string;
   operator: { name: string; category: string };
   tariffName: string;
   segment?: string;
-  region: string;
   monthlyFeeRub?: number;
   dataGb?: number;
   dataUnlimited: boolean;
@@ -16,58 +17,119 @@ interface Tariff {
   includedServices?: string;
   esimAvailable?: boolean;
   sourceUrl?: string;
-  collectedAt: string;
   parserConfidence?: number;
   collectionMethod?: string;
+}
+
+interface Run {
+  id: string;
+  status: string;
+  startedAt: string;
+  finishedAt?: string;
+  successCount: number;
+  totalOperators: number;
 }
 
 interface Operator { id: string; name: string }
 
 export default function TariffsPage() {
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string>("");
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterOp, setFilterOp] = useState("");
   const [search, setSearch] = useState("");
 
+  // Load runs list on mount
   useEffect(() => {
     Promise.all([
+      fetch("/api/tariffs").then((r) => r.json()),
       fetch("/api/operators").then((r) => r.json()),
-    ]).then(([ops]) => setOperators(ops));
+    ]).then(([data, ops]) => {
+      const runList: Run[] = data.runs ?? [];
+      setRuns(runList);
+      setOperators(ops);
+      // Auto-select latest run
+      if (runList.length > 0) {
+        setSelectedRunId(runList[0].id);
+      } else {
+        setLoading(false);
+      }
+    });
   }, []);
 
-  useEffect(() => {
+  // Load tariffs when run or filters change
+  const loadTariffs = useCallback(() => {
+    if (!selectedRunId) return;
     setLoading(true);
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ runId: selectedRunId });
     if (filterOp) params.set("operatorId", filterOp);
     if (search) params.set("search", search);
-    fetch(`/api/tariffs?${params}`).then((r) => r.json()).then(setTariffs).finally(() => setLoading(false));
-  }, [filterOp, search]);
+    fetch(`/api/tariffs?${params}`)
+      .then((r) => r.json())
+      .then((data) => setTariffs(data.tariffs ?? []))
+      .finally(() => setLoading(false));
+  }, [selectedRunId, filterOp, search]);
+
+  useEffect(() => { loadTariffs(); }, [loadTariffs]);
+
+  const selectedRun = runs.find((r) => r.id === selectedRunId);
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Тарифы</h1>
           <p className="text-sm text-gray-500">{tariffs.length} тарифов</p>
         </div>
-        <div className="flex gap-2">
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
+        <div className="flex gap-2 flex-wrap">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск по названию..."
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm w-48" />
-          <select value={filterOp} onChange={(e) => setFilterOp(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm">
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm w-44"
+          />
+          <select
+            value={filterOp}
+            onChange={(e) => setFilterOp(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+          >
             <option value="">Все операторы</option>
-            {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            {operators.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <select
+            value={selectedRunId}
+            onChange={(e) => setSelectedRunId(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white"
+          >
+            {runs.length === 0 && <option value="">Нет данных</option>}
+            {runs.map((r, i) => (
+              <option key={r.id} value={r.id}>
+                {i === 0 ? "▶ " : ""}{format(new Date(r.startedAt), "d MMM, HH:mm", { locale: ru })} — {r.successCount}/{r.totalOperators} оп.
+              </option>
+            ))}
           </select>
         </div>
       </div>
+
+      {selectedRun && (
+        <div className="flex gap-4 text-xs text-gray-500 bg-gray-50 rounded px-3 py-2 border border-gray-100">
+          <span>Запуск: <span className="font-medium text-gray-700">{format(new Date(selectedRun.startedAt), "d MMMM yyyy, HH:mm", { locale: ru })}</span></span>
+          <span>Статус: <span className={`font-medium ${selectedRun.status === "completed" ? "text-green-700" : "text-yellow-700"}`}>{selectedRun.status === "completed" ? "Завершён" : "Частично"}</span></span>
+          <span>Операторов: <span className="font-medium text-gray-700">{selectedRun.successCount}/{selectedRun.totalOperators}</span></span>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-gray-500">Загрузка...</div>
       ) : tariffs.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400 text-sm">
-          Тарифов не найдено. Запустите сбор данных на дашборде.
+          {runs.length === 0
+            ? "Запусков нет. Нажмите «Инициализировать БД», затем «Запустить сбор» на дашборде."
+            : "Тарифов не найдено для выбранного запуска."}
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
@@ -98,6 +160,9 @@ export default function TariffsPage() {
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-900 max-w-[180px]">
                     <div className="truncate" title={t.tariffName}>{t.tariffName}</div>
+                    {t.collectionMethod === "ai-knowledge" && (
+                      <div className="text-xs text-yellow-600">⚠ AI</div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{t.segment ?? "—"}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">
@@ -119,15 +184,13 @@ export default function TariffsPage() {
                   <td className="px-3 py-2 text-xs">
                     {t.sourceUrl ? (
                       <a href={t.sourceUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-blue-500 hover:underline truncate block max-w-[100px]">
-                        ссылка
-                      </a>
+                        className="text-blue-500 hover:underline">ссылка</a>
                     ) : "—"}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    {t.parserConfidence ? (
+                    {t.parserConfidence != null ? (
                       <span className={`px-1 py-0.5 rounded ${t.parserConfidence >= 0.8 ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"}`}>
-                        {Math.round((t.parserConfidence ?? 0) * 100)}%
+                        {Math.round(t.parserConfidence * 100)}%
                       </span>
                     ) : "—"}
                   </td>

@@ -5,18 +5,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const operatorId = searchParams.get("operatorId");
   const search = searchParams.get("search");
+  const runId = searchParams.get("runId");
 
-  // Use explicit runId or default to the latest completed/partial run
-  let runId = searchParams.get("runId");
+  // If no runId — return list of available runs for the selector
   if (!runId) {
-    const latestRun = await prisma.collectionRun.findFirst({
+    const runs = await prisma.collectionRun.findMany({
       where: { status: { in: ["completed", "partial"] } },
-      orderBy: { finishedAt: "desc" },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, status: true, startedAt: true, finishedAt: true, successCount: true, totalOperators: true },
+      take: 20,
     });
-    runId = latestRun?.id ?? null;
+    return NextResponse.json({ runs, tariffs: [] });
   }
-
-  if (!runId) return NextResponse.json([]);
 
   const tariffs = await prisma.tariffSnapshot.findMany({
     where: {
@@ -28,5 +28,5 @@ export async function GET(req: NextRequest) {
     orderBy: [{ operator: { name: "asc" } }, { monthlyFeeRub: "asc" }],
     take: 500,
   });
-  return NextResponse.json(tariffs);
+  return NextResponse.json({ runs: [], tariffs });
 }
