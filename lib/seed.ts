@@ -3,59 +3,52 @@ import bcrypt from "bcryptjs";
 
 const OPERATORS = [
   // MNO
-  { name: "МТС", slug: "mts", category: "MNO", website: "https://www.mts.ru",
+  { name: "МТС", slug: "mts", category: "MNO", website: "https://moskva.mts.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.mts.ru/personal/mobile/tariffs/", renderer: "ai" },
-      { sourceType: "promotions", url: "https://www.mts.ru/personal/actions/", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://moskva.mts.ru/personal/mobilnaya-svyaz/tarifi/vse-tarifi/mobile-tv-inet", renderer: "jina" },
+      { sourceType: "promotions", url: "https://moskva.mts.ru/personal/vse-akcii", renderer: "jina" },
     ]
   },
-  { name: "МегаФон", slug: "megafon", category: "MNO", website: "https://www.megafon.ru",
+  { name: "МегаФон", slug: "megafon", category: "MNO", website: "https://moscow.megafon.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.megafon.ru/tariffs/", renderer: "ai" },
-      { sourceType: "promotions", url: "https://www.megafon.ru/specials/", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/tariffs/", renderer: "jina" },
     ]
   },
   { name: "Билайн", slug: "beeline", category: "MNO", website: "https://beeline.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://beeline.ru/customers/products/mobile/tariffs/", renderer: "ai" },
-      { sourceType: "promotions", url: "https://beeline.ru/customers/products/mobile/tariffs/options/", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://beeline.ru/customers/products/mobile/tariffs/", renderer: "jina" },
     ]
   },
   { name: "Tele2 / T2", slug: "tele2", category: "MNO", website: "https://msk.tele2.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://msk.tele2.ru/tariff", renderer: "ai" },
-      { sourceType: "promotions", url: "https://msk.tele2.ru/action", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://msk.tele2.ru/tariff", renderer: "jina" },
     ]
   },
   // MVNO
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/tariffs", renderer: "ai" },
+      // Yota — конструктор тарифов, нет фиксированных планов; AI-knowledge
+      { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "ai-knowledge" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://rt.ru/mobile/tariffs", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://rt.ru/mobile/tariffs", renderer: "jina" },
     ]
   },
-  { name: "Тинькофф Мобайл", slug: "tinkoff-mobile", category: "MVNO", website: "https://www.tinkoff.ru/mobile-operator/",
+  { name: "Тинькофф Мобайл", slug: "tinkoff-mobile", category: "MVNO", website: "https://www.tinkoff.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.tinkoff.ru/mobile-operator/tariffs/", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://www.tinkoff.ru/mobile-operator/tariffs/", renderer: "jina" },
     ]
   },
-  { name: "СберМобайл", slug: "sbermobile", category: "MVNO", website: "https://www.sber.ru/mobile",
+  { name: "СберМобайл", slug: "sbermobile", category: "MVNO", website: "https://www.sber.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.sber.ru/mobile/tariffs", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://www.sber.ru/sberbank/mobile/", renderer: "jina" },
     ]
   },
   { name: "МОТИВ", slug: "motiv", category: "MVNO", website: "https://motivtelecom.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://motivtelecom.ru/tariffs/", renderer: "ai" },
-    ]
-  },
-  { name: "Ультра-Мобайл", slug: "ultra-mobile", category: "MVNO", website: "https://ultra-mobile.ru",
-    sources: [
-      { sourceType: "b2c_tariffs", url: "https://ultra-mobile.ru/tariff", renderer: "ai" },
+      { sourceType: "b2c_tariffs", url: "https://motivtelecom.ru/tariffs/", renderer: "jina" },
     ]
   },
 ];

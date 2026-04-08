@@ -4,20 +4,18 @@ import { extractTariffsWithAI, extractPromotionsWithAI, getTariffsFromAIKnowledg
 
 export const maxDuration = 60;
 
-type SourceRow = { id: string; sourceType: string; url: string };
+type SourceRow = { id: string; sourceType: string; url: string; renderer: string };
 
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-async function fetchPage(url: string): Promise<string | null> {
+async function fetchPageViaJina(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    const res = await fetch(jinaUrl, {
       headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept: "text/plain,text/html,*/*",
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.7",
+        "X-Return-Format": "text",
       },
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) return null;
     const text = await res.text();
@@ -62,16 +60,21 @@ export async function POST(req: NextRequest) {
     );
     const website = (operator as { website?: string }).website ?? tariffSources[0]?.url ?? "";
 
-    // Try to fetch from site
+    // Try to fetch from site (skip ai-knowledge sources — go straight to fallback)
     let fetchedFromSite = false;
-    for (const source of tariffSources) {
+    const fetchableTariffSources = tariffSources.filter((s: SourceRow) => s.renderer !== "ai-knowledge");
+    for (const source of fetchableTariffSources) {
       try {
-        const html = await fetchPage(source.url);
+        const html = await fetchPageViaJina(source.url);
         if (!html) continue;
         const tariffs = await extractTariffsWithAI(html, operator.name, source.url, model);
         if (tariffs.length > 0) {
           fetchedFromSite = true;
+          const seenNames = new Set<string>();
           for (const t of tariffs) {
+            const key = t.tariffName?.trim().toLowerCase();
+            if (!key || seenNames.has(key)) continue;
+            seenNames.add(key);
             await prisma.tariffSnapshot.create({
               data: {
                 runId, operatorId,
@@ -100,12 +103,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // AI-knowledge fallback
+    // AI-knowledge fallback: when Jina fetch failed or all sources are renderer=ai-knowledge
     if (!fetchedFromSite && tariffSources.length > 0) {
       method = "ai-knowledge";
       try {
         const { tariffs, confidence } = await getTariffsFromAIKnowledge(operator.name, website, model);
+        const seenAiNames = new Set<string>();
         for (const t of tariffs) {
+          const key = t.tariffName?.trim().toLowerCase();
+          if (!key || seenAiNames.has(key)) continue;
+          seenAiNames.add(key);
           await prisma.tariffSnapshot.create({
             data: {
               runId, operatorId,
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
     // Promotions
     for (const source of promoSources) {
       try {
-        const html = await fetchPage(source.url);
+        const html = await fetchPageViaJina(source.url);
         if (!html) continue;
         const promos = await extractPromotionsWithAI(html, operator.name, source.url, model);
         for (const p of promos) {
