@@ -55,6 +55,23 @@ const OPERATORS = [
 ];
 
 export async function seedDatabase() {
+  // Purge old run data — keep only the latest completed/partial run to eliminate duplicates
+  const latestRun = await prisma.collectionRun.findFirst({
+    where: { status: { in: ["completed", "partial"] } },
+    orderBy: { finishedAt: "desc" },
+  });
+  const runsToDelete = await prisma.collectionRun.findMany({
+    where: latestRun ? { id: { not: latestRun.id } } : {},
+    select: { id: true },
+  });
+  if (runsToDelete.length > 0) {
+    const ids = runsToDelete.map((r) => r.id);
+    await prisma.tariffSnapshot.deleteMany({ where: { runId: { in: ids } } });
+    await prisma.promotionSnapshot.deleteMany({ where: { runId: { in: ids } } });
+    await prisma.collectionRunItem.deleteMany({ where: { runId: { in: ids } } });
+    await prisma.collectionRun.deleteMany({ where: { id: { in: ids } } });
+  }
+
   // Create default admin user
   const existing = await prisma.user.findFirst();
   if (!existing) {

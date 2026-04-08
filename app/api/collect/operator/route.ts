@@ -45,8 +45,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "runId and operatorId required" }, { status: 400 });
   }
 
+  // Idempotency guard: if this operator was already processed in this run, return cached result
+  const existingItem = await prisma.collectionRunItem.findFirst({
+    where: { runId, operatorId },
+  });
+  if (existingItem) {
+    return NextResponse.json({
+      operatorId,
+      status: existingItem.status,
+      tariffsFound: existingItem.tariffsFound,
+      promoFound: existingItem.promoFound,
+      method: existingItem.method,
+    });
+  }
+
   const settings = await prisma.appSettings.findFirst();
-  const model = settings?.openrouterModel ?? "google/gemini-2.0-flash-lite-001";
+  const model = settings?.openrouterModel ?? "google/gemini-2.5-flash-preview-05-20";
 
   const operator = await prisma.operator.findUnique({
     where: { id: operatorId },
@@ -89,6 +103,9 @@ export async function POST(req: NextRequest) {
             const key = t.tariffName?.trim().toLowerCase();
             if (!key || seenNames.has(key)) continue;
             seenNames.add(key);
+            // DB-level guard against duplicates (e.g. if same tariff appears in multiple page sections)
+            const dupCheck = await prisma.tariffSnapshot.findFirst({ where: { runId, operatorId, tariffName: t.tariffName } });
+            if (dupCheck) continue;
             await prisma.tariffSnapshot.create({
               data: {
                 runId, operatorId,
@@ -127,6 +144,8 @@ export async function POST(req: NextRequest) {
           const key = t.tariffName?.trim().toLowerCase();
           if (!key || seenNames.has(key)) continue;
           seenNames.add(key);
+          const dupCheck2 = await prisma.tariffSnapshot.findFirst({ where: { runId, operatorId, tariffName: t.tariffName } });
+          if (dupCheck2) continue;
           await prisma.tariffSnapshot.create({
             data: {
               runId, operatorId,
