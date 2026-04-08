@@ -11,40 +11,45 @@ const OPERATORS = [
   },
   { name: "МегаФон", slug: "megafon", category: "MNO", website: "https://moscow.megafon.ru",
     sources: [
-      // МегаФон — SPA, Jina не получает данные; AI-knowledge fallback
+      // SPA — Jina не получает данные; AI-knowledge
       { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/tariffs/", renderer: "ai-knowledge" },
     ]
   },
   { name: "Билайн", slug: "beeline", category: "MNO", website: "https://beeline.ru",
     sources: [
       { sourceType: "b2c_tariffs", url: "https://beeline.ru/customers/products/mobile/tariffs/", renderer: "jina" },
+      { sourceType: "promotions", url: "https://beeline.ru/customers/products/mobile/", renderer: "jina" },
     ]
   },
   { name: "Tele2 / T2", slug: "tele2", category: "MNO", website: "https://msk.tele2.ru",
     sources: [
       { sourceType: "b2c_tariffs", url: "https://msk.tele2.ru/tariff", renderer: "jina" },
+      { sourceType: "promotions", url: "https://msk.tele2.ru/promo", renderer: "jina" },
     ]
   },
   // MVNO
   { name: "Yota", slug: "yota", category: "MVNO", website: "https://www.yota.ru",
     sources: [
-      // Yota — конструктор тарифов, нет фиксированных планов; renderer=constructor → специальная обработка
+      // Конструктор тарифов — специальная обработка без AI
       { sourceType: "b2c_tariffs", url: "https://www.yota.ru/", renderer: "constructor" },
     ]
   },
   { name: "Ростелеком Мобайл", slug: "rostelecom", category: "MVNO", website: "https://rt.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://rt.ru/mobile/tariffs", renderer: "jina" },
+      // Сайт блокирует Jina (VPN/CAPTCHA) — AI-knowledge
+      { sourceType: "b2c_tariffs", url: "https://rt.ru/mobile/tariffs", renderer: "ai-knowledge" },
     ]
   },
   { name: "Тинькофф Мобайл", slug: "tinkoff-mobile", category: "MVNO", website: "https://www.tinkoff.ru",
     sources: [
       { sourceType: "b2c_tariffs", url: "https://www.tinkoff.ru/mobile-operator/tariffs/", renderer: "jina" },
+      { sourceType: "promotions", url: "https://www.tinkoff.ru/mobile-operator/", renderer: "jina" },
     ]
   },
   { name: "СберМобайл", slug: "sbermobile", category: "MVNO", website: "https://www.sber.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://www.sber.ru/sberbank/mobile/", renderer: "jina" },
+      // Сайт вернул 404 через Jina — AI-knowledge
+      { sourceType: "b2c_tariffs", url: "https://www.sber.ru/sberbank/mobile/", renderer: "ai-knowledge" },
     ]
   },
   { name: "МОТИВ", slug: "motiv", category: "MVNO", website: "https://motivtelecom.ru",
@@ -100,14 +105,14 @@ export async function seedDatabase() {
     });
 
     for (const src of sources) {
-      // Match by sourceType (not URL) so URL/renderer changes are applied on re-seed
+      // Match by sourceType + url — unique combination per operator
       const existingSource = await prisma.source.findFirst({
-        where: { operatorId: operator.id, sourceType: src.sourceType },
+        where: { operatorId: operator.id, url: src.url },
       });
       if (existingSource) {
         await prisma.source.update({
           where: { id: existingSource.id },
-          data: { url: src.url, renderer: src.renderer },
+          data: { sourceType: src.sourceType, renderer: src.renderer },
         });
       } else {
         await prisma.source.create({

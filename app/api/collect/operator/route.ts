@@ -9,14 +9,27 @@ type SourceRow = { id: string; sourceType: string; url: string; renderer: string
 
 /** Fixes common AI extraction errors before saving */
 function normalizeTariff(t: TariffData): TariffData {
-  // 1024 GB or more = AI encoded "unlimited" as a number
-  const dataGb = (t.dataGb != null && t.dataGb >= 500) ? undefined : (t.dataGb ?? undefined);
-  const dataUnlimited = t.dataUnlimited || (t.dataGb != null && t.dataGb >= 500);
-  // 0 price = not found, treat as undefined
+  // Strip common page-noise prefixes from tariff names (e.g. "подписка bee HIT" → "bee HIT")
+  const tariffName = t.tariffName
+    ?.replace(/^(подписка|тариф|пакет|план)\s+/i, "")
+    .trim() ?? t.tariffName;
+
+  // 1024 GB or more = AI encoded "unlimited" as a number → treat as unlimited
+  const aiEncodedUnlimited = t.dataGb != null && t.dataGb >= 500;
+  const dataUnlimited = t.dataUnlimited || aiEncodedUnlimited;
+  // If unlimited — clear the GB value (no contradiction)
+  const dataGb = dataUnlimited ? undefined : (t.dataGb ?? undefined);
+
+  // Same for voice
+  const voiceUnlimited = t.voiceUnlimited ?? false;
+  const voiceMinutes = voiceUnlimited ? undefined : (
+    (t.voiceMinutes != null && t.voiceMinutes > 0) ? t.voiceMinutes : undefined
+  );
+
+  // 0 price = not found
   const monthlyFeeRub = (t.monthlyFeeRub != null && t.monthlyFeeRub > 0) ? t.monthlyFeeRub : undefined;
-  // 0 minutes = not found, treat as undefined
-  const voiceMinutes = (t.voiceMinutes != null && t.voiceMinutes > 0) ? t.voiceMinutes : undefined;
-  return { ...t, dataGb, dataUnlimited, monthlyFeeRub, voiceMinutes };
+
+  return { ...t, tariffName, dataGb, dataUnlimited, voiceMinutes, voiceUnlimited, monthlyFeeRub };
 }
 
 async function fetchPageViaJina(url: string): Promise<string | null> {
