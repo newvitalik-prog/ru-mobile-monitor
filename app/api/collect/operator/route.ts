@@ -10,12 +10,12 @@ type SourceRow = { id: string; sourceType: string; url: string; renderer: string
 /** Fixes common AI extraction errors before saving */
 function normalizeTariff(t: TariffData): TariffData {
   // 1024 GB or more = AI encoded "unlimited" as a number
-  const dataGb = (t.dataGb != null && t.dataGb >= 500) ? null : (t.dataGb ?? null);
+  const dataGb = (t.dataGb != null && t.dataGb >= 500) ? undefined : (t.dataGb ?? undefined);
   const dataUnlimited = t.dataUnlimited || (t.dataGb != null && t.dataGb >= 500);
-  // 0 price = not found, treat as null
-  const monthlyFeeRub = (t.monthlyFeeRub != null && t.monthlyFeeRub > 0) ? t.monthlyFeeRub : null;
-  // 0 minutes = not found, treat as null
-  const voiceMinutes = (t.voiceMinutes != null && t.voiceMinutes > 0) ? t.voiceMinutes : null;
+  // 0 price = not found, treat as undefined
+  const monthlyFeeRub = (t.monthlyFeeRub != null && t.monthlyFeeRub > 0) ? t.monthlyFeeRub : undefined;
+  // 0 minutes = not found, treat as undefined
+  const voiceMinutes = (t.voiceMinutes != null && t.voiceMinutes > 0) ? t.voiceMinutes : undefined;
   return { ...t, dataGb, dataUnlimited, monthlyFeeRub, voiceMinutes };
 }
 
