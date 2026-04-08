@@ -161,7 +161,12 @@ export default function TariffsPage() {
                   <td className="px-3 py-2 font-medium text-gray-900 max-w-[180px]">
                     <div className="truncate" title={t.tariffName}>{t.tariffName}</div>
                     {t.collectionMethod === "ai-knowledge" && (
-                      <div className="text-xs text-yellow-600">⚠ AI</div>
+                      <div
+                        className="text-xs text-yellow-600 cursor-help"
+                        title="Данные получены из базы знаний ИИ — сайт оператора недоступен. Требуется ручная проверка."
+                      >
+                        ⚠ Не с сайта
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{t.segment ?? "—"}</td>
@@ -198,6 +203,19 @@ export default function TariffsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tariffs.length > 0 && (
+        <div className="flex gap-6 text-xs text-gray-400 pt-1">
+          <span className="flex items-center gap-1">
+            <span className="bg-green-50 text-green-700 px-1 rounded">85%</span>
+            — данные получены с сайта оператора
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-yellow-600">⚠ Не с сайта</span>
+            — сайт недоступен, данные из базы знаний ИИ (требуют проверки)
+          </span>
         </div>
       )}
     </div>
