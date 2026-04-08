@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { extractTariffsWithAI, extractPromotionsWithAI, getTariffsFromAIKnowledge } from "@/lib/openrouter";
+import type { TariffData } from "@/lib/openrouter";
 
 export const maxDuration = 60;
 
 type SourceRow = { id: string; sourceType: string; url: string; renderer: string };
+
+/** Fixes common AI extraction errors before saving */
+function normalizeTariff(t: TariffData): TariffData {
+  // 1024 GB or more = AI encoded "unlimited" as a number
+  const dataGb = (t.dataGb != null && t.dataGb >= 500) ? null : (t.dataGb ?? null);
+  const dataUnlimited = t.dataUnlimited || (t.dataGb != null && t.dataGb >= 500);
+  // 0 price = not found, treat as null
+  const monthlyFeeRub = (t.monthlyFeeRub != null && t.monthlyFeeRub > 0) ? t.monthlyFeeRub : null;
+  // 0 minutes = not found, treat as null
+  const voiceMinutes = (t.voiceMinutes != null && t.voiceMinutes > 0) ? t.voiceMinutes : null;
+  return { ...t, dataGb, dataUnlimited, monthlyFeeRub, voiceMinutes };
+}
 
 async function fetchPageViaJina(url: string): Promise<string | null> {
   try {
@@ -62,6 +75,7 @@ export async function POST(req: NextRequest) {
 
     // Try to fetch from site (skip ai-knowledge sources — go straight to fallback)
     let fetchedFromSite = false;
+    const seenNames = new Set<string>(); // dedup across all sources for this operator+run
     const fetchableTariffSources = tariffSources.filter((s: SourceRow) => s.renderer !== "ai-knowledge");
     for (const source of fetchableTariffSources) {
       try {
@@ -70,8 +84,8 @@ export async function POST(req: NextRequest) {
         const tariffs = await extractTariffsWithAI(html, operator.name, source.url, model);
         if (tariffs.length > 0) {
           fetchedFromSite = true;
-          const seenNames = new Set<string>();
-          for (const t of tariffs) {
+          for (const raw of tariffs) {
+            const t = normalizeTariff(raw);
             const key = t.tariffName?.trim().toLowerCase();
             if (!key || seenNames.has(key)) continue;
             seenNames.add(key);
@@ -108,11 +122,11 @@ export async function POST(req: NextRequest) {
       method = "ai-knowledge";
       try {
         const { tariffs, confidence } = await getTariffsFromAIKnowledge(operator.name, website, model);
-        const seenAiNames = new Set<string>();
-        for (const t of tariffs) {
+        for (const raw of tariffs) {
+          const t = normalizeTariff(raw);
           const key = t.tariffName?.trim().toLowerCase();
-          if (!key || seenAiNames.has(key)) continue;
-          seenAiNames.add(key);
+          if (!key || seenNames.has(key)) continue;
+          seenNames.add(key);
           await prisma.tariffSnapshot.create({
             data: {
               runId, operatorId,

@@ -5,13 +5,14 @@ const OPERATORS = [
   // MNO
   { name: "МТС", slug: "mts", category: "MNO", website: "https://moskva.mts.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://moskva.mts.ru/personal/mobilnaya-svyaz/tarifi/vse-tarifi/mobile-tv-inet", renderer: "jina" },
+      { sourceType: "b2c_tariffs", url: "https://moskva.mts.ru/personal/mobilnaya-svyaz/tarifi/vse-tarifi/all", renderer: "jina" },
       { sourceType: "promotions", url: "https://moskva.mts.ru/personal/vse-akcii", renderer: "jina" },
     ]
   },
   { name: "МегаФон", slug: "megafon", category: "MNO", website: "https://moscow.megafon.ru",
     sources: [
-      { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/tariffs/", renderer: "jina" },
+      // МегаФон — SPA, Jina не получает данные; AI-knowledge fallback
+      { sourceType: "b2c_tariffs", url: "https://moscow.megafon.ru/tariffs/", renderer: "ai-knowledge" },
     ]
   },
   { name: "Билайн", slug: "beeline", category: "MNO", website: "https://beeline.ru",
@@ -78,10 +79,16 @@ export async function seedDatabase() {
     });
 
     for (const src of sources) {
+      // Match by sourceType (not URL) so URL/renderer changes are applied on re-seed
       const existingSource = await prisma.source.findFirst({
-        where: { operatorId: operator.id, url: src.url },
+        where: { operatorId: operator.id, sourceType: src.sourceType },
       });
-      if (!existingSource) {
+      if (existingSource) {
+        await prisma.source.update({
+          where: { id: existingSource.id },
+          data: { url: src.url, renderer: src.renderer },
+        });
+      } else {
         await prisma.source.create({
           data: { ...src, operatorId: operator.id },
         });
